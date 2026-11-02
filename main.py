@@ -3,10 +3,10 @@ import numpy as np
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
-from zone import Zone
-from vav import VAV
-from ahu import AHU
-from zone_model import ZoneModel
+from ahu_vav_system.zone import Zone
+from ahu_vav_system.vav import VAV
+from ahu_vav_system.ahu import AHU
+from ahu_vav_system.single_zone import SingleZone
 
 # --- Read outdoor temperature from EPW ---
 epw_path = os.path.join("input_files", "CAN_ON_Ottawa.716280_CWEC.epw")
@@ -44,7 +44,7 @@ Q_coil_f  = interp1d(t_series, Q_coil_series,  fill_value="extrapolate")
 zone = Zone(C, R, Q_gains_f)
 vav  = VAV(ctrl, Q_rad_f)
 ahu  = AHU(Q_coil_f, T_sasp, foa_min=0.2, foa0=f_oa)
-model = ZoneModel(zone, vav, ahu, T_out_f)
+model = SingleZone(zone, vav, ahu, T_out_f)
 
 res = model.simulate(t_series, T_in0)
 

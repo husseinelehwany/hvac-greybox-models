@@ -33,20 +33,22 @@ The economizer picks the outdoor air fraction `foa` (between a minimum and 1.0) 
 
 ## Simulation approach
 
-Time is stepped hourly. For each step the AHU chooses `foa`, then `scipy.integrate.solve_ivp` (RK45) integrates the zone temperature over that interval, with the weather, internal gains, reheat and coil heat interpolated in time. Results are the indoor temperature, supply air flow and outdoor air fraction over time.
+`SingleZone.simulate()` steps time hourly. For each step the AHU chooses `foa` (`AHU.step`), then `scipy.integrate.solve_ivp` (RK45) integrates the zone temperature over that interval, with the weather, internal gains, reheat and coil heat interpolated in time. `simulate()` returns a dict with the time `t`, indoor temperature `T_in`, supply air flow `msa` and outdoor air fraction `foa`.
 
 ## Project structure
 
 | File | Contents |
 |---|---|
 | `main.py` | Inputs (weather, parameters, schedules), builds the components, runs the simulation and plots the results |
-| `zone.py` | `Zone`: RC zone model |
-| `vav.py` | `VAV`: VAV box with reheat coil and proportional flow controller |
-| `ahu.py` | `AHU`: mixing box, economizer and coil |
-| `ahu_vav_system.py` | Class that couples zone, VAV and AHU and runs the time-stepping loop |
+| `ahu_vav_system/zone.py` | `Zone`: RC zone model |
+| `ahu_vav_system/vav.py` | `VAV`: VAV box with reheat coil and proportional flow controller |
+| `ahu_vav_system/ahu.py` | `AHU`: mixing box, economizer and coil |
+| `ahu_vav_system/single_zone.py` | `SingleZone`: couples one zone, VAV and AHU and runs the time-stepping loop (`rhs`, `simulate`) |
 | `constants.py` | Air density and specific heat |
-| `zone_model.py` | Earlier single-file version of the model (functions plus a script) |
+| `zone_model.py` | Earlier single-file version of the model (functions plus a script); superseded by the classes above |
 | `input_files/` | EPW weather file |
+
+The component classes are independent of each other. Only `SingleZone` knows how they are wired together, which is the piece to extend for multi-zone systems.
 
 ## Requirements
 
@@ -54,11 +56,23 @@ Python 3 with `numpy`, `scipy` and `matplotlib`.
 
 ## Usage
 
-Run from the repository root so the relative path to `input_files/` resolves:
+Run from the repository root so the relative path to `input_files/` and the imports of `constants` and `ahu_vav_system` resolve:
 
 ```
 python main.py
 ```
+
+Minimal example of what `main.py` does:
+
+```python
+zone  = Zone(C, R, Q_gains_f)
+vav   = VAV(ctrl, Q_rad_f)
+ahu   = AHU(Q_coil_f, T_sasp, foa_min=0.2, foa0=0.2)
+model = SingleZone(zone, vav, ahu, T_out_f)
+res   = model.simulate(t_series, T_in0)
+```
+
+The `*_f` arguments are `scipy.interpolate.interp1d` interpolators of the hourly series (outdoor temperature, internal gains, reheat and coil heat).
 
 Parameters (zone `C` and `R`, setpoint, controller gain, flow limits, coil and reheat power, supply air setpoint, simulated duration) are set at the top of `main.py`.
 

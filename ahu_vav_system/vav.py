@@ -1,32 +1,39 @@
-import numpy as np
 from constants import RHO_AIR, CP_AIR
 
 
 class VAV:
-    """VAV box with reheat coil and a proportional flow controller.
+    """VAV box with baseboard heater, controlled by a deadband P controller on the zone temperature.
+
+    Above the deadband the cooling output opens the damper from msa_min to msa_max.
+    Below the deadband the flow stays at msa_min and the heating output ramps the baseboard heater.
 
     Args:
-        ctrl    : P-controller settings (T_set, Kp, msa_min, msa_max, direction)
-                  direction = +1 : flow rises when T_in > T_set (cooling)
-                  direction = -1 : flow rises when T_in < T_set (heating)
-        Q_rad_f : interpolator t [s] -> reheat coil heat [W]
+        controller  : DeadbandPController on the zone temperature, output(T_in) -> (y_cool, y_heat)
+        msa_min     : minimum supply air flow [L/s]
+        msa_max     : maximum supply air flow [L/s]
+        Q_rad_rated : rated baseboard heat [W]
     """
-    def __init__(self, ctrl, Q_rad_f):
-        self.ctrl = ctrl
-        self.Q_rad_f = Q_rad_f
+    def __init__(self, controller, msa_min, msa_max, Q_rad_rated):
+        self.controller = controller
+        self.msa_min = msa_min
+        self.msa_max = msa_max
+        self.Q_rad_rated = Q_rad_rated
 
     @property
     def T_set(self):
-        return self.ctrl["T_set"]
+        return self.controller.setpoint
 
     def flow(self, T_in):
-        """Supply air flow requested by the zone temperature controller [L/s]."""
-        c = self.ctrl
-        e = c.get("direction", 1) * (T_in - c["T_set"])
-        msa = np.clip(c["msa_min"] + c["Kp"] * e, c["msa_min"], c["msa_max"])
-        return msa
+        """Supply air flow [L/s] from the cooling output of the controller."""
+        y_cool, _ = self.controller.output(T_in)
+        return self.msa_min + y_cool * (self.msa_max - self.msa_min)
 
-    def heat(self, t, T_in, msa, T_sa):
+    def baseboard_heater(self, T_in):
+        """baseboard heat [W] from the heating output of the controller."""
+        _, y_heat = self.controller.output(T_in)
+        return y_heat * self.Q_rad_rated
+
+    def heat(self, T_in, msa, T_sa):
         """Heat delivered to the zone [W].
 
         Q_vav = Q_rad + rho * cp * msa * (T_sa - T_in)
@@ -34,5 +41,5 @@ class VAV:
           T_sa : supply air temperature [°C]
           T_in : current zone temperature [°C]
         """
-        Q_vav = self.Q_rad_f(t) + RHO_AIR * CP_AIR * (msa / 1000) * (T_sa - T_in)
+        Q_vav = self.baseboard_heater(T_in) + RHO_AIR * CP_AIR * (msa / 1000) * (T_sa - T_in)
         return Q_vav

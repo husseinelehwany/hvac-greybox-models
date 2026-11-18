@@ -13,6 +13,7 @@ from ahu_vav_system.vav import VAV
 from ahu_vav_system.ahu import AHU
 from ahu_vav_system.single_zone import SingleZone
 from weather import Weather
+from controller import DeadbandPController
 
 INPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "input_files")
 DEFAULT_CITY = "Ottawa"
@@ -43,7 +44,7 @@ def run_simulation(weather, start, end, p):
     """Run the AHU + VAV + zone model from start to end (hourly, both inclusive).
 
     p is a dict of the model inputs (see `sidebar_inputs`). Returns the outdoor
-    temperature series, the simulation results and the zone setpoint.
+    temperature series, the simulation results and the VAV zone controller.
     """
     T_out_series = weather.temperature_between(start, end)
     n = len(T_out_series)
@@ -54,26 +55,26 @@ def run_simulation(weather, start, end, p):
 
     T_out_f   = interp(T_out_series)
     Q_gains_f = interp(np.full(n, p["Q_gains"]))
-    Q_rad_f   = interp(np.full(n, p["Q_rad"]))
-    Q_coil_f  = interp(np.full(n, p["Q_coil"]))
 
-    ctrl = dict(T_set=p["T_set"], Kp=p["Kp"], msa_min=p["msa_min"], msa_max=p["msa_max"],
-                direction=p["direction"])
+    vav_ctrl = DeadbandPController(setpoint=p["T_set"], deadband=p["deadband"],
+                                   Kp_cool=p["Kp_cool"], Kp_heat=p["Kp_heat"])
     zone = Zone(p["C"], p["R"], Q_gains_f)
-    vav  = VAV(ctrl, Q_rad_f)
-    ahu  = AHU(Q_coil_f, p["T_sasp"], foa_min=p["foa_min"], foa0=p["foa0"])
+    vav  = VAV(vav_ctrl, p["msa_min"], p["msa_max"], p["Q_rad_rated"])
+    ahu  = AHU(p["Q_coil_rated"], p["T_sasp"], Kp_coil=p["Kp_coil"],
+               foa_min=p["foa_min"], foa0=p["foa0"])
     model = SingleZone(zone, vav, ahu, T_out_f)
 
     res = model.simulate(t_series, p["T_in0"])
-    return T_out_series, res, vav.T_set
+    return T_out_series, res, vav_ctrl
 
 
-def make_figure(times, T_out_series, res, T_set):
+def make_figure(times, T_out_series, res, vav_ctrl):
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=[9, 9], sharex=True)
 
     ax1.plot(times, res["T_in"], label="Indoor temp")
     ax1.plot(times, T_out_series, label="Outdoor temp", ls="--")
-    ax1.axhline(T_set, color="k", ls=":", label="Setpoint")
+    ax1.plot(times, res["T_sa"], label="Supply air temp")
+    ax1.axhspan(vav_ctrl.sp_heat, vav_ctrl.sp_cool, color="grey", alpha=0.2, label="Deadband")
     ax1.set_ylabel("Temperature [°C]")
     ax1.legend(frameon=False)
 
@@ -114,7 +115,9 @@ def sidebar_inputs():
         Q_gains = st.number_input("Internal gains [W]", value=500.0, step=50.0)
 
         st.subheader("AHU")
-        Q_coil = st.number_input("Coil heat [W]  (+ heating, − cooling)", value=1200.0, step=100.0)
+        Q_coil_rated = st.number_input("Coil rated heat [W]  (limits heating and cooling)",
+                                       value=1200.0, min_value=0.0, step=100.0)
+        Kp_coil = st.number_input("Coil controller gain Kp [W/K]", value=1000.0, min_value=0.0, step=100.0)
         T_sasp = st.number_input("Supply air temperature setpoint [°C]", value=18.0, step=0.5)
         foa_min = st.number_input("Minimum outdoor air fraction [-]", value=0.2,
                                   min_value=0.0, max_value=1.0, step=0.05)
@@ -122,21 +125,23 @@ def sidebar_inputs():
                                min_value=0.0, max_value=1.0, step=0.05)
 
         st.subheader("VAV")
-        Q_rad = st.number_input("Reheat coil heat [W]", value=1000.0, step=100.0)
         T_set = st.number_input("Zone temperature setpoint [°C]", value=22.0, step=0.5)
-        Kp = st.number_input("Controller gain Kp [L/s per K]", value=20.0, min_value=0.0, step=1.0)
+        deadband = st.number_input("Deadband [K]", value=2.0, min_value=0.0, step=0.5)
+        Kp_cool = st.number_input("Cooling gain [1/K]  (full flow 1/Kp above the deadband)",
+                                  value=0.5, min_value=0.0, step=0.1)
+        Kp_heat = st.number_input("Heating gain [1/K]  (full reheat 1/Kp below the deadband)",
+                                  value=0.5, min_value=0.0, step=0.1)
         msa_min = st.number_input("Minimum supply air flow [L/s]", value=10.0, min_value=0.1, step=5.0)
         msa_max = st.number_input("Maximum supply air flow [L/s]", value=800.0, min_value=0.1, step=50.0)
-        mode = st.selectbox("Control action", ["Heating (more flow when zone is cold)",
-                                               "Cooling (more flow when zone is hot)"])
+        Q_rad_rated = st.number_input("Reheat coil rated heat [W]", value=1000.0, min_value=0.0, step=100.0)
 
         st.form_submit_button("Run simulation")
 
     params = dict(
         C=C * 1e6, R=R, T_in0=T_in0, Q_gains=Q_gains,
-        Q_coil=Q_coil, T_sasp=T_sasp, foa_min=foa_min, foa0=foa0,
-        Q_rad=Q_rad, T_set=T_set, Kp=Kp, msa_min=msa_min, msa_max=msa_max,
-        direction=-1 if mode.startswith("Heating") else 1,
+        Q_coil_rated=Q_coil_rated, Kp_coil=Kp_coil, T_sasp=T_sasp, foa_min=foa_min, foa0=foa0,
+        T_set=T_set, deadband=deadband, Kp_cool=Kp_cool, Kp_heat=Kp_heat,
+        msa_min=msa_min, msa_max=msa_max, Q_rad_rated=Q_rad_rated,
     )
     return cities[city], start_date, end_date, params
 
@@ -161,7 +166,7 @@ def main():
     try:
         weather = Weather(epw_path)
         with st.spinner(f"Simulating {n_hours} hours..."):
-            T_out_series, res, T_set = run_simulation(weather, start, end, params)
+            T_out_series, res, vav_ctrl = run_simulation(weather, start, end, params)
     except Exception as e:
         st.error(f"Could not run the simulation: {e}")
         st.stop()
@@ -174,14 +179,18 @@ def main():
     c3.metric("Indoor max [°C]", f"{res['T_in'].max():.1f}")
     c4.metric("Peak supply flow [L/s]", f"{res['msa'].max():.0f}")
 
-    st.pyplot(make_figure(times, T_out_series, res, T_set))
+    st.pyplot(make_figure(times, T_out_series, res, vav_ctrl))
 
     df = pd.DataFrame({
         "time": times,
         "T_out [C]": T_out_series,
         "T_in [C]": res["T_in"],
+        "T_sa [C]": res["T_sa"],
         "msa [L/s]": res["msa"],
         "foa [-]": res["foa"],
+        "Q_coil [W]": res["Q_coil"],
+        "Q_rad [W]": res["Q_rad"],
+        "Q_vav [W]": res["Q_vav"],
     })
     with st.expander("Results table"):
         st.dataframe(df)

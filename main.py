@@ -50,11 +50,11 @@ T_sasp = 18.0           # supply air temperature setpoint [°C]
 # Interpolators, built once and reused by every ODE evaluation
 T_out_f   = interp1d(t_series_h, T_out_series_h,   fill_value="extrapolate")
 T_out_series = T_out_f(t_series)
-I_sol_f   = interp1d(t_series_h, I_sol_series_h,   fill_value="extrapolate")
-Q_gains_f   = interp1d(t_series, Q_gains_series,   fill_value="extrapolate")
+Q_sol_f   = interp1d(t_series_h, Q_sol_series_h,   fill_value="extrapolate")
+Q_gains_f = interp1d(t_series,   Q_gains_series,   fill_value="extrapolate")
 
 # --- Build and run the model ---
-zone = Zone(C, R, I_sol_f, Q_gains_f)
+zone = Zone(C, R, Q_sol_f, Q_gains_f)
 vav  = VAV(vav_ctrl, msa_min, msa_max, Q_rad_rated)
 ahu  = AHU(Q_coil_rated, T_sasp, Kp_coil=Kp_coil, foa_min=0.2, foa0=f_oa)
 start_time = time.time()

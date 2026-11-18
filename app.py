@@ -4,16 +4,15 @@ from datetime import date, datetime, time, timedelta
 import numpy as np
 import pandas as pd
 import streamlit as st
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from scipy.interpolate import interp1d
 
 from ahu_vav_system.zone import Zone
 from ahu_vav_system.vav import VAV
 from ahu_vav_system.ahu import AHU
 from ahu_vav_system.single_zone import SingleZone
+from ahu_vav_system.output_plots import plot_ahu_vav, plot_foa_vs_toa
 from weather import Weather
-from controller import DeadbandPController
+from controllers.deadband_p_controller import DeadbandPController
 
 INPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "input_files")
 DEFAULT_CITY = "Ottawa"
@@ -55,10 +54,11 @@ def run_simulation(weather, start, end, p):
 
     T_out_f   = interp(T_out_series)
     Q_gains_f = interp(np.full(n, p["Q_gains"]))
+    Q_sol_f   = interp(p["A_eff"] * weather.get_ghi(start, end))   # solar gain [W]
 
     vav_ctrl = DeadbandPController(setpoint=p["T_set"], deadband=p["deadband"],
                                    Kp_cool=p["Kp_cool"], Kp_heat=p["Kp_heat"])
-    zone = Zone(p["C"], p["R"], Q_gains_f)
+    zone = Zone(p["C"], p["R"], Q_sol_f, Q_gains_f)
     vav  = VAV(vav_ctrl, p["msa_min"], p["msa_max"], p["Q_rad_rated"])
     ahu  = AHU(p["Q_coil_rated"], p["T_sasp"], Kp_coil=p["Kp_coil"],
                foa_min=p["foa_min"], foa0=p["foa0"])
@@ -66,28 +66,6 @@ def run_simulation(weather, start, end, p):
 
     res = model.simulate(t_series, p["T_in0"])
     return T_out_series, res, vav_ctrl
-
-
-def make_figure(times, T_out_series, res, vav_ctrl):
-    fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=[9, 9], sharex=True)
-
-    ax1.plot(times, res["T_in"], label="Indoor temp")
-    ax1.plot(times, T_out_series, label="Outdoor temp", ls="--")
-    ax1.plot(times, res["T_sa"], label="Supply air temp")
-    ax1.axhspan(vav_ctrl.sp_heat, vav_ctrl.sp_cool, color="grey", alpha=0.2, label="Deadband")
-    ax1.set_ylabel("Temperature [°C]")
-    ax1.legend(frameon=False)
-
-    ax2.plot(times, res["msa"])
-    ax2.set_ylabel("Supply air flow [L/s]")
-
-    ax3.step(times, res["foa"], where="post")
-    ax3.set_ylabel("Outdoor air fraction [-]")
-    ax3.set_xlabel("Time")
-
-    ax3.xaxis.set_major_formatter(mdates.DateFormatter("%b %d\n%H:%M"))
-    fig.tight_layout()
-    return fig
 
 
 def sidebar_inputs():
@@ -113,6 +91,8 @@ def sidebar_inputs():
                             step=0.001, format="%.4f")
         T_in0 = st.number_input("Initial indoor temperature [°C]", value=20.0, step=0.5)
         Q_gains = st.number_input("Internal gains [W]", value=500.0, step=50.0)
+        A_eff = st.number_input("Effective solar aperture A_eff [m²]  (solar gain = A_eff × GHI)",
+                                value=2.0, min_value=0.0, step=0.5)
 
         st.subheader("AHU")
         Q_coil_rated = st.number_input("Coil rated heat [W]  (limits heating and cooling)",
@@ -138,7 +118,7 @@ def sidebar_inputs():
         st.form_submit_button("Run simulation")
 
     params = dict(
-        C=C * 1e6, R=R, T_in0=T_in0, Q_gains=Q_gains,
+        C=C * 1e6, R=R, T_in0=T_in0, Q_gains=Q_gains, A_eff=A_eff,
         Q_coil_rated=Q_coil_rated, Kp_coil=Kp_coil, T_sasp=T_sasp, foa_min=foa_min, foa0=foa0,
         T_set=T_set, deadband=deadband, Kp_cool=Kp_cool, Kp_heat=Kp_heat,
         msa_min=msa_min, msa_max=msa_max, Q_rad_rated=Q_rad_rated,
@@ -179,7 +159,8 @@ def main():
     c3.metric("Indoor max [°C]", f"{res['T_in'].max():.1f}")
     c4.metric("Peak supply flow [L/s]", f"{res['msa'].max():.0f}")
 
-    st.pyplot(make_figure(times, T_out_series, res, vav_ctrl))
+    st.pyplot(plot_ahu_vav(times, res, T_out_series, vav_ctrl.sp_heat, vav_ctrl.sp_cool))
+    st.pyplot(plot_foa_vs_toa(res, T_out_series))
 
     df = pd.DataFrame({
         "time": times,

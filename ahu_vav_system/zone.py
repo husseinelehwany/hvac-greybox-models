@@ -4,6 +4,7 @@ class Zone:
     Args:
         C         : thermal capacitance [J/K]
         R         : thermal resistance to outdoors [K/W]
+        Q_solar_f : interpolator t [s] -> solar heat gain [W]
         Q_gains_f : interpolator t [s] -> internal gains [W]
     """
     def __init__(self, C, R, Q_solar_f, Q_gains_f):

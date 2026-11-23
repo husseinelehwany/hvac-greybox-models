@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <title>Two zones with VAV boxes and AHU</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.css" />
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+    import { mount } from "https://cdn.jsdelivr.net/npm/@stlite/browser@1.12.0/build/stlite.js";
+    const files = {
+  "app.py": {
+    "url": "../app.py"
+  },
+  "hvac_greybox/__init__.py": {
+    "url": "../hvac_greybox/__init__.py"
+  },
+  "hvac_greybox/constants.py": {
+    "url": "../hvac_greybox/constants.py"
+  },
+  "hvac_greybox/controllers/__init__.py": {
+    "url": "../hvac_greybox/controllers/__init__.py"
+  },
+  "hvac_greybox/controllers/controller.py": {
+    "url": "../hvac_greybox/controllers/controller.py"
+  },
+  "hvac_greybox/controllers/deadband_p_controller.py": {
+    "url": "../hvac_greybox/controllers/deadband_p_controller.py"
+  },
+  "hvac_greybox/controllers/p_controller.py": {
+    "url": "../hvac_greybox/controllers/p_controller.py"
+  },
+  "hvac_greybox/equipment/__init__.py": {
+    "url": "../hvac_greybox/equipment/__init__.py"
+  },
+  "hvac_greybox/equipment/ahu.py": {
+    "url": "../hvac_greybox/equipment/ahu.py"
+  },
+  "hvac_greybox/equipment/vav.py": {
+    "url": "../hvac_greybox/equipment/vav.py"
+  },
+  "hvac_greybox/gui/__init__.py": {
+    "url": "../hvac_greybox/gui/__init__.py"
+  },
+  "hvac_greybox/gui/schematics.py": {
+    "url": "../hvac_greybox/gui/schematics.py"
+  },
+  "hvac_greybox/plotting/__init__.py": {
+    "url": "../hvac_greybox/plotting/__init__.py"
+  },
+  "hvac_greybox/plotting/output_plots.py": {
+    "url": "../hvac_greybox/plotting/output_plots.py"
+  },
+  "hvac_greybox/systems/__init__.py": {
+    "url": "../hvac_greybox/systems/__init__.py"
+  },
+  "hvac_greybox/systems/ahu_vav_single_zone.py": {
+    "url": "../hvac_greybox/systems/ahu_vav_single_zone.py"
+  },
+  "hvac_greybox/systems/ahu_vav_two_zones.py": {
+    "url": "../hvac_greybox/systems/ahu_vav_two_zones.py"
+  },
+  "hvac_greybox/weather.py": {
+    "url": "../hvac_greybox/weather.py"
+  },
+  "hvac_greybox/zones/__init__.py": {
+    "url": "../hvac_greybox/zones/__init__.py"
+  },
+  "hvac_greybox/zones/zone_1r1c.py": {
+    "url": "../hvac_greybox/zones/zone_1r1c.py"
+  },
+  "hvac_greybox/zones/zone_2r2c.py": {
+    "url": "../hvac_greybox/zones/zone_2r2c.py"
+  },
+  "data/weather/CAN_AB_Edmonton.711230_CWEC.epw": {
+    "url": "../data/weather/CAN_AB_Edmonton.711230_CWEC.epw"
+  },
+  "data/weather/CAN_BC_VANCOUVER-INTL-A_1108395_CWEC.epw": {
+    "url": "../data/weather/CAN_BC_VANCOUVER-INTL-A_1108395_CWEC.epw"
+  },
+  "data/weather/CAN_BC_Victoria.717990_CWEC.epw": {
+    "url": "../data/weather/CAN_BC_Victoria.717990_CWEC.epw"
+  },
+  "data/weather/CAN_ON_Ottawa.716280_CWEC.epw": {
+    "url": "../data/weather/CAN_ON_Ottawa.716280_CWEC.epw"
+  },
+  "data/weather/CAN_ON_Toronto.716240_CWEC.epw": {
+    "url": "../data/weather/CAN_ON_Toronto.716240_CWEC.epw"
+  },
+  "data/weather/CAN_QC_MONTREAL-INTL-A_7025251_CWEC.epw": {
+    "url": "../data/weather/CAN_QC_MONTREAL-INTL-A_7025251_CWEC.epw"
+  }
+};
+    mount(
+      {
+        requirements: ["numpy", "scipy", "matplotlib", "pandas"],
+        entrypoint: "app.py",
+        files: files,
+      },
+      document.getElementById("root"),
+    );
+  </script>
+</body>
+</html>

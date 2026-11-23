@@ -1,0 +1,8 @@
+# Install with: pip install -r requirements.txt
+# Minimum versions are the ones the project was developed with
+# (Streamlit 1.11+ is needed for st.tabs; the browser build also ran on a much newer Streamlit).
+numpy>=1.21
+scipy>=1.9
+matplotlib>=3.5
+pandas>=1.4
+streamlit>=1.12

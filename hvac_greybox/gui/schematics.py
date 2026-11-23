@@ -141,6 +141,104 @@ def zone_svg(v):
     return _svg(h, body), h
 
 
+def _resistor(x0, x1, y):
+    """Resistor: zigzag from x0 to x1 at height y."""
+    n = 8
+    step = (x1 - x0 - 30) / (n - 1)
+    pts = [f"{x0},{y}"] + [f"{x0 + 15 + i * step:.0f},{y + (-10 if i % 2 == 0 else 10)}" for i in range(n)] + [f"{x1},{y}"]
+    return f'<polyline points="{" ".join(pts)}" fill="none" stroke="{INK}" stroke-width="2.5"/>'
+
+
+def _capacitor(x, y):
+    """Capacitor from a node at (x, y) down to ground."""
+    return f"""
+  <line x1="{x}" y1="{y + 6}" x2="{x}" y2="{y + 22}" stroke="{INK}" stroke-width="2"/>
+  <line x1="{x - 20}" y1="{y + 22}" x2="{x + 20}" y2="{y + 22}" stroke="{INK}" stroke-width="3"/>
+  <line x1="{x - 20}" y1="{y + 31}" x2="{x + 20}" y2="{y + 31}" stroke="{INK}" stroke-width="3"/>
+  <line x1="{x}" y1="{y + 31}" x2="{x}" y2="{y + 45}" stroke="{INK}" stroke-width="2"/>
+  <line x1="{x - 14}" y1="{y + 45}" x2="{x + 14}" y2="{y + 45}" stroke="{INK}" stroke-width="2"/>
+  <line x1="{x - 9}" y1="{y + 50}" x2="{x + 9}" y2="{y + 50}" stroke="{INK}" stroke-width="2"/>
+  <line x1="{x - 4}" y1="{y + 55}" x2="{x + 4}" y2="{y + 55}" stroke="{INK}" stroke-width="2"/>"""
+
+
+def zone_2r2c_svg(v, title="Zone"):
+    """2R2C room: T_out –R_out– T_in –R_m– T_m with C_in and C_m to ground, solar through a
+    window, internal gains and thermostat.
+
+    v holds one zone's values: A_eff, R_out, R_m, C_in_MJ, C_m_MJ, T_in0, Q_gains, T_set,
+    deadband, Kp_cool, Kp_heat.
+    """
+    h = 330
+    sp_c = v["T_set"] + v["deadband"] / 2
+    sp_h = v["T_set"] - v["deadband"] / 2
+    y = 230                       # height of the RC circuit
+    x_out, x_in, x_m = 110, 340, 500
+    body = f"""
+  {_text(110, 40, "Outdoor", 16, MUTED, weight="bold")}
+  {_text(565, 40, title, 16, MUTED, weight="bold")}
+
+  <!-- room: wall on the left with a window, outline elsewhere -->
+  <rect x="250" y="55" width="630" height="245" fill="{FILL}" stroke="{WALL}" stroke-width="2"/>
+  <rect x="222" y="55" width="28" height="245" fill="url(#hatch)" stroke="{WALL}"/>
+  <rect x="222" y="90" width="28" height="55" fill="#cfe8ff" stroke="{WALL}"/>
+  {_text(236, 85, "window", 11, MUTED)}
+
+  <!-- sun and solar gain through the window -->
+  <circle cx="60" cy="80" r="17" fill="{SUN}"/>
+  {"".join(f'<line x1="{60 + 22 * c:.1f}" y1="{80 + 22 * s:.1f}" x2="{60 + 30 * c:.1f}" y2="{80 + 30 * s:.1f}" stroke="{SUN}" stroke-width="2.5"/>'
+           for c, s in [(1, 0), (0.707, 0.707), (0, 1), (-0.707, 0.707), (-1, 0), (-0.707, -0.707), (0, -1), (0.707, -0.707)])}
+  <line x1="88" y1="92" x2="335" y2="135" stroke="{SUN}" stroke-width="3" marker-end="url(#arrow-sun)"/>
+  {_text(350, 120, "Solar gain = A_eff × GHI", 13, INK, "start")}
+  {_text(350, 138, f"A_eff = {v['A_eff']:.1f} m²", 13, SUN, "start", "bold")}
+
+  <!-- outdoor node -R_out- air node -R_m- mass node -->
+  {_text(420, y - 70, f"T_in(0) = T_m(0) = {v['T_in0']:.1f} °C", 13, INK, weight="bold")}
+  <circle cx="{x_out}" cy="{y}" r="6" fill="{INK}"/>
+  {_text(x_out, y + 28, "T_out", 13, INK)}
+  {_text(x_out, y + 45, "(weather file)", 11, MUTED)}
+  <line x1="{x_out + 6}" y1="{y}" x2="175" y2="{y}" stroke="{INK}" stroke-width="2"/>
+  {_resistor(175, 300, y)}
+  {_text(237, y - 22, f"R_out = {v['R_out']:.4f} K/W", 13, INK, weight="bold")}
+  <line x1="300" y1="{y}" x2="{x_in - 6}" y2="{y}" stroke="{INK}" stroke-width="2"/>
+  <circle cx="{x_in}" cy="{y}" r="6" fill="{INK}"/>
+  {_text(x_in, y - 46, "T_in (air)", 13, INK)}
+  <line x1="{x_in + 6}" y1="{y}" x2="370" y2="{y}" stroke="{INK}" stroke-width="2"/>
+  {_resistor(370, 470, y)}
+  {_text(420, y - 22, f"R_m = {v['R_m']:.4f} K/W", 13, INK, weight="bold")}
+  <line x1="470" y1="{y}" x2="{x_m - 6}" y2="{y}" stroke="{INK}" stroke-width="2"/>
+  <circle cx="{x_m}" cy="{y}" r="6" fill="{INK}"/>
+  {_text(x_m, y - 46, "T_m (mass)", 13, INK)}
+
+  <!-- capacitors to ground -->
+  {_capacitor(x_in, y)}
+  {_text(x_in + 30, y + 31, f"C_in = {v['C_in_MJ']:.2f} MJ/K", 13, INK, "start", "bold")}
+  {_capacitor(x_m, y)}
+  {_text(x_m + 30, y + 31, f"C_m = {v['C_m_MJ']:.2f} MJ/K", 13, INK, "start", "bold")}
+
+  <!-- internal gains: person and computer with rising heat -->
+  <circle cx="585" cy="140" r="11" fill="none" stroke="{INK}" stroke-width="2"/>
+  <path d="M567,185 Q585,152 603,185" fill="none" stroke="{INK}" stroke-width="2"/>
+  <rect x="622" y="155" width="38" height="26" rx="3" fill="#fff" stroke="{INK}" stroke-width="2"/>
+  <line x1="616" y1="185" x2="666" y2="185" stroke="{INK}" stroke-width="2"/>
+  {"".join(f'<path d="M{x},120 q-7,-10 0,-20 q7,-10 0,-20" fill="none" stroke="{WARM}" stroke-width="2.5" marker-end="url(#arrow-warm)"/>'
+           for x in (580, 615, 650))}
+  {_text(615, 205, "Internal gains", 13, INK)}
+  {_text(615, 223, f"{v['Q_gains']:.0f} W", 13, WARM, weight="bold")}
+
+  <!-- thermostat: setpoint, deadband and controller gains -->
+  <line x1="705" y1="70" x2="705" y2="285" stroke="#d0d7de" stroke-width="1.5"/>
+  {_text(792, 88, "Thermostat", 12, MUTED, weight="bold")}
+  <rect x="774" y="98" width="36" height="36" rx="6" fill="#fff" stroke="{INK}" stroke-width="2"/>
+  {_text(792, 122, "T", 14, INK, weight="bold")}
+  {_text(792, 158, f"T_set = {v['T_set']:.1f} °C", 13, INK, weight="bold")}
+  {_text(792, 176, f"deadband = {v['deadband']:.1f} K", 13, INK, weight="bold")}
+  {_text(792, 194, f"heat &lt; {sp_h:.1f} · cool &gt; {sp_c:.1f} °C", 11, MUTED)}
+  {_text(792, 220, f"Kp_cool = {v['Kp_cool']:.2f} 1/K", 13, COOL, weight="bold")}
+  {_text(792, 238, f"Kp_heat = {v['Kp_heat']:.2f} 1/K", 13, WARM, weight="bold")}
+"""
+    return _svg(h, body), h
+
+
 def ahu_svg(v):
     """AHU: exhaust/return duct on top, outdoor/supply duct below, mixing damper, coil, fan, SAT sensor."""
     h = 290
@@ -201,7 +299,7 @@ def ahu_svg(v):
     return _svg(h, body), h
 
 
-def vav_svg(v):
+def vav_svg(v, title="Zone"):
     """VAV box (damper and reheat coil) discharging into the zone, with the thermostat signals."""
     h = 290
     y0, dh = 120, 44   # duct top and height
@@ -223,11 +321,11 @@ def vav_svg(v):
 
   <!-- zone with thermostat -->
   <rect x="560" y="45" width="320" height="215" fill="none" stroke="{WALL}" stroke-width="2"/>
-  {_text(720, 70, "Zone", 16, MUTED, weight="bold")}
+  {_text(720, 70, title, 16, MUTED, weight="bold")}
   <rect x="770" y="{y0 + 4}" width="36" height="36" rx="6" fill="#fff" stroke="{INK}" stroke-width="2"/>
   {_text(788, y0 + 28, "T", 14, INK, weight="bold")}
   {_text(788, y0 + 62, "thermostat", 12, MUTED)}
-  {_text(720, 225, "setpoint, deadband and gains: see Zone", 12, MUTED)}
+  {_text(720, 225, f"setpoint, deadband and gains: see {title}", 12, MUTED)}
 
   <!-- control signals from the thermostat -->
   <path d="M788,{y0 + 4} V25 H235 V{y0 + 8}" fill="none" stroke="{COOL}" stroke-width="1.5" stroke-dasharray="5,4"/>

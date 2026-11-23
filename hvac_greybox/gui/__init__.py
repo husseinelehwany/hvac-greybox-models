@@ -1,4 +1,4 @@
 """Streamlit GUI helpers: SVG schematics of the zone, AHU and VAV."""
-from .schematics import zone_svg, ahu_svg, vav_svg, show
+from .schematics import zone_svg, zone_2r2c_svg, ahu_svg, vav_svg, show
 
-__all__ = ["zone_svg", "ahu_svg", "vav_svg", "show"]
+__all__ = ["zone_svg", "zone_2r2c_svg", "ahu_svg", "vav_svg", "show"]

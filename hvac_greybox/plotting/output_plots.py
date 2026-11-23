@@ -36,6 +36,49 @@ def plot_ahu_vav(times, res, T_out_series, sp_heat, sp_cool):
     return fig
 
 
+def plot_ahu_vav_two_zones(times, res, T_out_series, sp_a, sp_b):
+    """Time series of the two-zone system: zone a and zone b on the same axes, AHU values once.
+
+    Args:
+        times        : datetimes of the samples
+        res          : results of AHUVAVTwoZones.simulate (keys with _a / _b suffix)
+        T_out_series : outdoor air temperature at the samples [°C]
+        sp_a, sp_b   : (heating, cooling) setpoints of zone a and zone b [°C]
+    """
+    colors = {"a": "C0", "b": "C1"}
+    fig, ax = plt.subplots(4, 1, figsize=[6, 11], sharex=True)
+
+    for z, (sp_heat, sp_cool) in (("a", sp_a), ("b", sp_b)):
+        ax[0].plot(times, res[f"T_in_{z}"], color=colors[z], label=f"Zone {z}")
+        ax[0].axhspan(sp_heat, sp_cool, color=colors[z], alpha=0.12, label=f"Deadband {z}")
+    ax[0].plot(times, T_out_series, color="grey", ls="--", label="Outdoor")
+    ax[0].plot(times, res["T_sa"], color="C2", lw=1, label="Supply air")
+    ax[0].set_ylabel("Temperature [°C]")
+    ax[0].legend(frameon=False, fontsize=8, ncol=2)
+
+    for z in ("a", "b"):
+        ax[1].plot(times, res[f"msa_{z}"], color=colors[z], label=f"VAV {z}")
+    ax[1].plot(times, res["msa"], color="k", lw=1, label="AHU total")
+    ax[1].set_ylabel("Supply air flow [L/s]")
+    ax[1].legend(frameon=False, fontsize=8)
+
+    ax[2].step(times, res["foa"], where="post")
+    ax[2].set_ylabel("Outdoor air fraction [-]")
+
+    ax[3].plot(times, res["Q_coil"], color="k", lw=1, label="AHU coil")
+    for z in ("a", "b"):
+        ax[3].plot(times, res[f"Q_rad_{z}"], color=colors[z], label=f"Baseboard {z}")
+        ax[3].plot(times, res[f"Q_vav_{z}"], color=colors[z], ls="--", label=f"VAV {z} to zone")
+    ax[3].axhline(0, color="k", lw=0.5)
+    ax[3].set_xlabel("Time")
+    ax[3].xaxis.set_major_formatter(mdates.DateFormatter("%b %d\n%H:%M"))
+    ax[3].set_ylabel("Heat [W]")
+    ax[3].legend(frameon=False, fontsize=8, ncol=2)
+
+    fig.tight_layout()
+    return fig
+
+
 def plot_foa_vs_toa(res, T_out_series):
     """Scatter of the outdoor air fraction against the outdoor air temperature.
 
